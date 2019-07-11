@@ -115,3 +115,5 @@ data
 *.pkl.json
 *.log.json
 work_dirs/
+data/
+result/

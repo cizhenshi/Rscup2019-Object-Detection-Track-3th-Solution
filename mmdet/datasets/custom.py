@@ -5,14 +5,14 @@ import numpy as np
 from mmcv.parallel import DataContainer as DC
 from torch.utils.data import Dataset
 
-from .registry import DATASETS
 from .transforms import (ImageTransform, BboxTransform, MaskTransform,
                          SegMapTransform, Numpy2Tensor)
 from .utils import to_tensor, random_scale
 from .extra_aug import ExtraAugmentation
+from icecream import ic
+import time
+import copy
 
-
-@DATASETS.register_module
 class CustomDataset(Dataset):
     """Custom dataset for detection.
 
@@ -127,6 +127,7 @@ class CustomDataset(Dataset):
 
         # image rescale if keep ratio
         self.resize_keep_ratio = resize_keep_ratio
+        self.count = 1
 
     def __len__(self):
         return len(self.img_infos)
@@ -174,6 +175,57 @@ class CustomDataset(Dataset):
                 continue
             return data
 
+
+    def aug_before_prepare(self, img, img_info, gt_boxes, labels, gt_poly, gt_masks):
+        h = img_info['height']
+        w = img_info['width']
+        h_array = np.zeros(h, dtype=np.int32)
+        w_array = np.zeros(w, dtype=np.int32)
+        min_crop_side_ratios = [0.15, 0.15]
+        for poly in gt_poly[0]:
+            poly = np.round(poly, decimals=0).astype(np.int32)
+            xs = poly[0::2]
+            ys = poly[1::2]
+            minx = min(xs)
+            maxx = max(xs)
+            w_array[minx:maxx] = 1
+            miny = min(ys)
+            maxy = max(ys)
+            h_array[miny:maxy] = 1
+
+        h_axis = np.where(h_array == 0)[0]
+        w_axis = np.where(w_array == 0)[0]
+        if len(h_axis) == 0 or len(w_axis) == 0:
+            return img, img_info, gt_boxes, labels, gt_masks
+        for i in range(50):
+            xx = np.random.choice(w_axis, size=2)
+            yy = np.random.choice(h_axis, size=2)
+            xmin = np.min(xx)
+            xmax = np.max(xx)
+            ymin = np.min(yy)
+            ymax = np.max(yy)
+            if xmax - xmin < min_crop_side_ratios[0]*w or ymax - ymin < min_crop_side_ratios[1]*h:
+                # area too small
+                continue
+
+            img_info['height'] = ymax - ymin
+            img_info['width'] = xmax - xmin
+            img = img[ymin:ymax, xmin:xmax, :]
+            new_labels = []
+            new_gtboxes = []
+            new_gtmasks = []
+            for box, label, mask in zip(gt_boxes, labels, gt_masks):
+                x1, y1, w, h = box
+                x2 = x1 + w
+                y2 = y1 + h
+                if(x1 > xmin and x2 < xmax and y1 > ymin and y2 < ymax):
+                    new_gtboxes.append(box)
+                    new_labels.append(label)
+                    mask = copy.deepcopy(mask[ymin:ymax, xmin:xmax])
+                    new_gtmasks.append(mask)
+            return img, img_info, np.array(new_gtboxes), new_labels, new_gtmasks
+        return img, img_info, gt_boxes, labels, gt_masks
+
     def prepare_train_img(self, idx):
         img_info = self.img_infos[idx]
         # load image
@@ -195,13 +247,14 @@ class CustomDataset(Dataset):
                 proposals = proposals[:, :4]
             else:
                 scores = None
-
         ann = self.get_ann_info(idx)
+        # img_info['height'] = ymax - ymin
+        # img_info['width'] = xmax - xmin
         gt_bboxes = ann['bboxes']
         gt_labels = ann['labels']
+        gt_masks = ann['masks']
         if self.with_crowd:
             gt_bboxes_ignore = ann['bboxes_ignore']
-
         # skip the image if there is no valid gt bbox
         if len(gt_bboxes) == 0:
             return None
@@ -238,7 +291,7 @@ class CustomDataset(Dataset):
             gt_bboxes_ignore = self.bbox_transform(gt_bboxes_ignore, img_shape,
                                                    scale_factor, flip)
         if self.with_mask:
-            gt_masks = self.mask_transform(ann['masks'], pad_shape,
+            gt_masks = self.mask_transform(gt_masks, pad_shape,
                                            scale_factor, flip)
 
         ori_shape = (img_info['height'], img_info['width'], 3)

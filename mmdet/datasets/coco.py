@@ -2,26 +2,14 @@ import numpy as np
 from pycocotools.coco import COCO
 
 from .custom import CustomDataset
-from .registry import DATASETS
+from icecream import ic
+import copy
 
-
-@DATASETS.register_module
 class CocoDataset(CustomDataset):
-
-    CLASSES = ('person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus',
-               'train', 'truck', 'boat', 'traffic_light', 'fire_hydrant',
-               'stop_sign', 'parking_meter', 'bench', 'bird', 'cat', 'dog',
-               'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe',
-               'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee',
-               'skis', 'snowboard', 'sports_ball', 'kite', 'baseball_bat',
-               'baseball_glove', 'skateboard', 'surfboard', 'tennis_racket',
-               'bottle', 'wine_glass', 'cup', 'fork', 'knife', 'spoon', 'bowl',
-               'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot',
-               'hot_dog', 'pizza', 'donut', 'cake', 'chair', 'couch',
-               'potted_plant', 'bed', 'dining_table', 'toilet', 'tv', 'laptop',
-               'mouse', 'remote', 'keyboard', 'cell_phone', 'microwave',
-               'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock',
-               'vase', 'scissors', 'teddy_bear', 'hair_drier', 'toothbrush')
+    #
+    CLASSES = ('tennis-court', 'container-crane', 'storage-tank', 'baseball-diamond', 'plane','ground-track-field',
+               'helicopter', 'airport', 'harbor', 'ship', 'large-vehicle', 'swimming-pool', 'soccer-ball-field',
+               'roundabout', 'basketball-court', 'bridge', 'small-vehicle', 'helipad')
 
     def load_annotations(self, ann_file):
         self.coco = COCO(ann_file)
@@ -35,6 +23,8 @@ class CocoDataset(CustomDataset):
         for i in self.img_ids:
             info = self.coco.loadImgs([i])[0]
             info['filename'] = info['file_name']
+            info['height'] = int(info['height'])
+            info['width'] = int(info['width'])
             img_infos.append(info)
         return img_infos
 
@@ -42,7 +32,7 @@ class CocoDataset(CustomDataset):
         img_id = self.img_infos[idx]['id']
         ann_ids = self.coco.getAnnIds(imgIds=[img_id])
         ann_info = self.coco.loadAnns(ann_ids)
-        return self._parse_ann_info(ann_info, self.with_mask)
+        return self._parse_ann_info(copy.deepcopy(self.img_infos[idx]), ann_info, self.with_mask)
 
     def _filter_imgs(self, min_size=32):
         """Filter images too small or without ground truths."""
@@ -55,10 +45,48 @@ class CocoDataset(CustomDataset):
                 valid_inds.append(i)
         return valid_inds
 
-    def _parse_ann_info(self, ann_info, with_mask=True):
+    def random_crop(self, img_info, ann_info):
+        H = img_info["height"]
+        W = img_info["width"]
+        h_array = np.zeros(H, dtype=np.int32)
+        w_array = np.zeros(W, dtype=np.int32)
+        min_crop_side_ratios = [0.15, 0.15]
+        for i, ann in enumerate(ann_info):
+            if ann.get('ignore', False):
+                continue
+            xmin, ymin, w, h = ann['bbox']
+            xmin = int(xmin)
+            ymin = int(ymin)
+            xmax = int(xmin + w)
+            ymax = int(ymin + h)
+            w_array[xmin:xmax] = 1
+            h_array[ymin:ymax] = 1
+        h_axis = np.where(h_array == 0)[0]
+        w_axis = np.where(w_array == 0)[0]
+        if len(h_axis) == 0 or len(w_axis) == 0:
+            return img_info, 0, W-1, 0, H-1
+        for i in range(50):
+            xx = np.random.choice(w_axis, size=2)
+            yy = np.random.choice(h_axis, size=2)
+            xmin = np.min(xx)
+            xmax = np.max(xx)
+            ymin = np.min(yy)
+            ymax = np.max(yy)
+            if xmax - xmin < min_crop_side_ratios[0] * W or ymax - ymin < min_crop_side_ratios[1] * H:
+                # area too small
+                continue
+            img_info['height'] = ymax - ymin
+            img_info['width'] = xmax - xmin
+            return img_info, xmin, xmax, ymin, ymax
+        return img_info, 0, W - 1, 0, H - 1
+
+
+
+    def _parse_ann_info(self, img_info, ann_info, with_mask=True):
         """Parse bbox and mask annotation.
 
         Args:
+            img_info: img information
             ann_info (list[dict]): Annotation info of an image.
             with_mask (bool): Whether to parse mask annotations.
 
@@ -66,6 +94,7 @@ class CocoDataset(CustomDataset):
             dict: A dict containing the following keys: bboxes, bboxes_ignore,
                 labels, masks, mask_polys, poly_lens.
         """
+
         gt_bboxes = []
         gt_labels = []
         gt_bboxes_ignore = []
@@ -77,10 +106,15 @@ class CocoDataset(CustomDataset):
             gt_masks = []
             gt_mask_polys = []
             gt_poly_lens = []
+        # img_info, xmin, xmax, ymin, ymax = self.random_crop(img_info, ann_info)
         for i, ann in enumerate(ann_info):
             if ann.get('ignore', False):
                 continue
             x1, y1, w, h = ann['bbox']
+            x2 = x1 + w
+            y2 = y1 + h
+            # if not (x1 > xmin and x2 < xmax and y1 > ymin and y2 < ymax):
+            #     continue
             if ann['area'] <= 0 or w < 1 or h < 1:
                 continue
             bbox = [x1, y1, x1 + w - 1, y1 + h - 1]
