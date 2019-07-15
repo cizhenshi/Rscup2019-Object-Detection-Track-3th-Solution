@@ -197,6 +197,7 @@ test_cfg = dict(
 # dataset settings
 dataset_type = 'CocoDataset'
 data_root = './data/rscup/'
+aug_root = "./data/rscup/aug/"
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 data = dict(
@@ -204,8 +205,8 @@ data = dict(
     workers_per_gpu=4,
     train=dict(
         type=dataset_type,
-        ann_file=data_root + 'annotation/annos_rscup_train.json',
-        img_prefix=data_root + 'train/',
+        ann_file=(data_root + 'annotation/annos_rscup_train.json', aug_root + 'annos_rscup_airport.json'),
+        img_prefix=(data_root + 'train/', aug_root + "airport/"),
         img_scale=(512, 512),
         img_norm_cfg=img_norm_cfg,
         size_divisor=32,
@@ -259,7 +260,7 @@ evaluation = dict(interval=5)
 total_epochs = 12
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = './work_dirs/rs_cascade_mask_rcnn_r50_fpn_1x'
+work_dir = './work_dirs/aug'
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
