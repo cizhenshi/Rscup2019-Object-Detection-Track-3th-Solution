@@ -205,8 +205,9 @@ data = dict(
     workers_per_gpu=4,
     train=dict(
         type=dataset_type,
-        ann_file=(data_root + 'annotation/annos_rscup_train.json', aug_root + 'annos_rscup_airport.json'),
-        img_prefix=(data_root + 'train/', aug_root + "airport/"),
+        ann_file=(data_root + 'annotation/annos_rscup_train.json', aug_root + 'annos_rscup_airport.json', aug_root +
+                  'annos_rscup_helipad.json'),
+        img_prefix=(data_root + 'train/', aug_root + "airport/", aug_root + "helipad/"),
         img_scale=(512, 512),
         img_norm_cfg=img_norm_cfg,
         size_divisor=32,
@@ -260,7 +261,7 @@ evaluation = dict(interval=5)
 total_epochs = 12
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = './work_dirs/aug'
+work_dir = './work_dirs/augh'
 load_from = None
 resume_from = None
 workflow = [('train', 1)]

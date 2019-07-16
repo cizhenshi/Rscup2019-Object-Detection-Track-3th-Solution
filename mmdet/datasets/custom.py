@@ -171,6 +171,52 @@ class CustomDataset(Dataset):
                 continue
             return data
 
+    def random_rotate(self, img, polys, masks, degree_range):
+        degree = (random.random() * 2 - 1) * degree_range
+        polys = np.array(polys).reshape(-1, 4, 2)
+        aug = iaa.Sequential(
+            [iaa.Affine(rotate=-degree)])
+        np_degree = -degree * np.pi / 180
+        h, w, _ = img.shape
+        rotation_matrix = np.array([[np.cos(np_degree), np.sin(np_degree)], [-np.sin(np_degree), np.cos(np_degree)]])
+        polys[:, :, 0] -= w / 2
+        polys[:, :, 1] -= h / 2
+        polys = np.dot(polys, rotation_matrix)
+        img = aug.augment_image(img)
+        h, w, _ = img.shape
+        print(img.shape)
+        polys[:, :, 0] += w / 2
+        polys[:, :, 1] += h / 2
+
+        xmin = np.min(polys[:, :, 0], axis=1)
+        xmax = np.max(polys[:, :, 0], axis=1)
+        ymin = np.min(polys[:, :, 1], axis=1)
+        ymax = np.max(polys[:, :, 1], axis=1)
+
+        boxes = np.stack(np.array([xmin, ymin, xmax, ymax], np.int32), axis=1)
+        boxes = np.reshape(boxes, (-1, 4))
+        masks = aug.augment_images(masks)
+        return img, boxes, list(masks)
+
+    def aug_before_prepare(self, img, bboxes, masks, polys):
+        aug = iaa.SomeOf((1, 3), [
+            iaa.Multiply(((0.7, 1.3))),
+            iaa.GaussianBlur(sigma=(0, 1.5)),
+            iaa.ChannelShuffle(1),
+            iaa.Pepper(p=0.03),
+            iaa.AdditiveGaussianNoise(scale=(0.03 * 255, 0.05 * 255)),
+            iaa.Dropout(p=(0.03, 0.05)),
+            iaa.Salt(p=(0.03, 0.05)),
+            iaa.Add((-10, 10)),
+            iaa.AverageBlur(k=(1, 3))
+        ])
+        if (random.random() > 0.5):
+            img, bboxes, masks = self.random_rotate(img, np.array(polys), masks, 90)
+        img = aug.augment_image(img)
+        return img, bboxes, masks
+
+
+
     def prepare_train_img(self, idx):
         img_info = self.img_infos[idx]
         # load image
@@ -207,6 +253,7 @@ class CustomDataset(Dataset):
         if self.extra_aug is not None:
             img, gt_bboxes, gt_labels = self.extra_aug(img, gt_bboxes,
                                                        gt_labels)
+
 
         # apply transforms
         flip = True if np.random.rand() < self.flip_ratio else False
