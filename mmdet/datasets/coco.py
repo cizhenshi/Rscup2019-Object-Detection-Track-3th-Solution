@@ -73,6 +73,7 @@ class CocoDataset(CustomDataset):
             if ann['area'] <= 0 or w < 1 or h < 1:
                 continue
             bbox = [x1, y1, x1 + w - 1, y1 + h - 1]
+            #bbox = [x1 - 0.1*w, y1 - 0.1*h, x1 + 1.1*w - 1, y1 + 1.1*h - 1]
             if ann['iscrowd']:
                 gt_bboxes_ignore.append(bbox)
             else:

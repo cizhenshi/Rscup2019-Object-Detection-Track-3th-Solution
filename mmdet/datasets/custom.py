@@ -126,6 +126,10 @@ class CustomDataset(Dataset):
         # image rescale if keep ratio
         self.resize_keep_ratio = resize_keep_ratio
 
+
+        # augment image and bbox
+        self.AUG = False
+
     def __len__(self):
         return len(self.img_infos)
 
@@ -240,6 +244,9 @@ class CustomDataset(Dataset):
                 scores = None
 
         ann = self.get_ann_info(idx)
+        if self.AUG:
+            img, ann['bboxes'], ann['masks'] = self.aug_before_prepare(img, ann['bboxes'], ann['masks'],
+                                                                     ann['mask_polys'])
         gt_bboxes = ann['bboxes']
         gt_labels = ann['labels']
         if self.with_crowd:
