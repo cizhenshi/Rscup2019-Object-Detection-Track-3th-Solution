@@ -1,18 +1,21 @@
 # model settings
-# fp16 settings
-# fp16 = dict(loss_scale=512.)
-
 model = dict(
-    type='CascadeRCNN',
+    type='HybridTaskCascade',
     num_stages=3,
     pretrained='modelzoo://resnet50',
+    interleaved=True,
+    mask_info_flow=True,
     backbone=dict(
         type='ResNet',
         depth=50,
         num_stages=4,
         out_indices=(0, 1, 2, 3),
         frozen_stages=1,
-        style='pytorch'),
+        style='pytorch',
+        dcn=dict(
+            modulated=False, deformable_groups=1, fallback_on_stride=False),
+        stage_with_dcn=(False, True, True, True),
+        ),
     neck=dict(
         type='FPN',
         in_channels=[256, 512, 1024, 2048],
@@ -23,7 +26,7 @@ model = dict(
         in_channels=256,
         feat_channels=256,
         anchor_scales=[8],
-        anchor_ratios=[0.5, 1.0, 1.5, 2.5, 5.0],
+        anchor_ratios=[0.5, 1.0, 1.5, 2.5, 5.0, 7.0],
         anchor_strides=[4, 8, 16, 32, 64],
         target_means=[.0, .0, .0, .0],
         target_stds=[1.0, 1.0, 1.0, 1.0],
@@ -97,7 +100,7 @@ model = dict(
         out_channels=256,
         featmap_strides=[4, 8, 16, 32]),
     mask_head=dict(
-        type='FCNMaskHead',
+        type='HTCMaskHead',
         num_convs=4,
         in_channels=256,
         conv_out_channels=256,
@@ -138,7 +141,7 @@ train_cfg = dict(
                 min_pos_iou=0.5,
                 ignore_iof_thr=-1),
             sampler=dict(
-                type='OHEMSampler',
+                type='RandomSampler',
                 num=512,
                 pos_fraction=0.25,
                 neg_pos_ub=-1,
@@ -154,7 +157,7 @@ train_cfg = dict(
                 min_pos_iou=0.6,
                 ignore_iof_thr=-1),
             sampler=dict(
-                type='OHEMSampler',
+                type='RandomSampler',
                 num=512,
                 pos_fraction=0.25,
                 neg_pos_ub=-1,
@@ -170,7 +173,7 @@ train_cfg = dict(
                 min_pos_iou=0.7,
                 ignore_iof_thr=-1),
             sampler=dict(
-                type='OHEMSampler',
+                type='RandomSampler',
                 num=512,
                 pos_fraction=0.25,
                 neg_pos_ub=-1,
@@ -183,13 +186,13 @@ train_cfg = dict(
 test_cfg = dict(
     rpn=dict(
         nms_across_levels=False,
-        nms_pre=2000,
-        nms_post=2000,
-        max_num=2000,
+        nms_pre=1000,
+        nms_post=1000,
+        max_num=1000,
         nms_thr=0.7,
         min_bbox_size=0),
     rcnn=dict(
-        score_thr=0.05,
+        score_thr=0.001,
         nms=dict(type='nms', iou_thr=0.5),
         max_per_img=1000,
         mask_thr_binary=0.5),
@@ -228,8 +231,8 @@ data = dict(
         with_label=True),
     test=dict(
         type=dataset_type,
-        ann_file=data_root + 'annotation/annos_rscup_val.json',
-        img_prefix=data_root + 'val',
+        ann_file=data_root + 'annotation/annos_rscup_test.json',
+        img_prefix=data_root + 'test',
         img_scale=(512, 512),
         img_norm_cfg=img_norm_cfg,
         size_divisor=32,
@@ -250,18 +253,17 @@ lr_config = dict(
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
-    interval=10,
+    interval=50,
     hooks=[
         dict(type='TextLoggerHook'),
         dict(type='TensorboardLoggerHook')
     ])
 # yapf:enable
 # runtime settings
-evaluation = dict(interval=5)
 total_epochs = 12
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = './work_dirs/aug_noise'
+work_dir = './work_dirs/htc_without_semantic_r50_fpn_1x'
 load_from = None
 resume_from = None
 workflow = [('train', 1)]

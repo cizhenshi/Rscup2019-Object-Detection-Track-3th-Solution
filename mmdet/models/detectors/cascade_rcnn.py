@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from .base import BaseDetector
-from .test_mixins import RPNTestMixin
+from .test_mixins import RPNTestMixin, BBoxTestMixin, MaskTestMixin
 from .. import builder
 from ..registry import DETECTORS
 from mmdet.core import (build_assigner, bbox2roi, bbox2result, build_sampler,
@@ -12,7 +12,7 @@ from mmdet.core import (build_assigner, bbox2roi, bbox2result, build_sampler,
 
 
 @DETECTORS.register_module
-class CascadeRCNN(BaseDetector, RPNTestMixin):
+class CascadeRCNN(BaseDetector, RPNTestMixin, BBoxTestMixin):
 
     def __init__(self,
                  num_stages,
@@ -241,7 +241,6 @@ class CascadeRCNN(BaseDetector, RPNTestMixin):
         x = self.extract_feat(img)
         proposal_list = self.simple_test_rpn(
             x, img_meta, self.test_cfg.rpn) if proposals is None else proposals
-
         img_shape = img_meta[0]['img_shape']
         ori_shape = img_meta[0]['ori_shape']
         scale_factor = img_meta[0]['scale_factor']
@@ -363,8 +362,40 @@ class CascadeRCNN(BaseDetector, RPNTestMixin):
 
         return results
 
-    def aug_test(self, img, img_meta, proposals=None, rescale=False):
-        raise NotImplementedError
+    # def aug_test(self, img, img_meta, proposals=None, rescale=False):
+    #     raise NotImplementedError
+
+
+
+
+
+    def aug_test(self, imgs, img_metas, proposals=None, rescale=False):
+        """Test with augmentations.
+
+        If rescale is False, then returned bboxes and masks will fit the scale
+        of imgs[0].
+        """
+        # recompute feats to save memory
+
+        proposal_list = self.aug_test_rpn(
+            self.extract_feats(imgs), img_metas, self.test_cfg.rpn)
+        det_bboxes, det_labels, segm_results = self.multi_test(self.extract_feats(imgs), img_metas, proposal_list,
+                                                  self.test_cfg.rcnn, rescale)
+
+        if rescale:
+            _det_bboxes = det_bboxes
+        else:
+            _det_bboxes = det_bboxes.clone()
+            _det_bboxes[:, :4] *= img_metas[0][0]['scale_factor']
+        bbox_results = bbox2result(_det_bboxes, det_labels,
+                                   self.bbox_head[-1].num_classes)
+
+        # det_bboxes always keep the original scale
+        # if self.with_mask:
+        #     segm_results = self.aug_test_mask(
+        #         self.extract_feats(imgs), img_metas, det_bboxes, det_labels)
+        return bbox_results
+
 
     def show_result(self, data, result, img_norm_cfg, **kwargs):
         if self.with_mask:

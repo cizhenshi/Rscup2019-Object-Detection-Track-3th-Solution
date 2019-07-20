@@ -1,6 +1,6 @@
 from mmdet.core import (bbox2roi, bbox_mapping, merge_aug_proposals,
-                        merge_aug_bboxes, merge_aug_masks, multiclass_nms)
-
+                        merge_aug_bboxes, merge_aug_masks, multiclass_nms, bbox2result)
+from icecream import ic
 
 class RPNTestMixin(object):
 
@@ -96,6 +96,56 @@ class BBoxTestMixin(object):
             rcnn_test_cfg.nms, rcnn_test_cfg.max_per_img)
         return det_bboxes, det_labels
 
+    def multi_test(self, feats, img_metas, proposal_list, rcnn_test_cfg, rescale):
+        aug_scores = []
+        aug_bboxes = []
+        for x, img_meta in zip(feats, img_metas):
+            img_shape = img_meta[0]['img_shape']
+            scale_factor = img_meta[0]['scale_factor']
+            flip = img_meta[0]['flip']
+            # "ms" in variable names means multi-stage
+            ms_scores = []
+            # TODO more flexible
+            proposals = bbox_mapping(proposal_list[0][:, :4], img_shape,
+                                     scale_factor, flip)
+            rois = bbox2roi([proposals])
+
+            # rois = bbox2roi(proposal_list)
+            for i in range(self.num_stages):
+                bbox_roi_extractor = self.bbox_roi_extractor[i]
+                bbox_head = self.bbox_head[i]
+
+                bbox_feats = bbox_roi_extractor(
+                    x[:len(bbox_roi_extractor.featmap_strides)], rois)
+                if self.with_shared_head:
+                    bbox_feats = self.shared_head(bbox_feats)
+
+                cls_score, bbox_pred = bbox_head(bbox_feats)
+                ms_scores.append(cls_score)
+
+                if i < self.num_stages - 1:
+                    bbox_label = cls_score.argmax(dim=1)
+                    rois = bbox_head.regress_by_class(rois, bbox_label, bbox_pred,
+                                                      img_meta[0])
+
+            cls_score = sum(ms_scores) / self.num_stages
+            det_bboxes, scores = self.bbox_head[-1].get_det_bboxes(
+                rois,
+                cls_score,
+                bbox_pred,
+                img_shape,
+                scale_factor,
+                rescale=False,
+                cfg=None)
+            aug_scores.append(scores)
+            aug_bboxes.append(det_bboxes)
+        print(aug_bboxes[0].shape, aug_bboxes[1].shape)
+        merged_bboxes, merged_scores = merge_aug_bboxes(
+            aug_bboxes, aug_scores, img_metas, rcnn_test_cfg)
+        det_bboxes, det_labels = multiclass_nms(
+            merged_bboxes, merged_scores, rcnn_test_cfg.score_thr,
+            rcnn_test_cfg.nms, rcnn_test_cfg.max_per_img)
+        return det_bboxes, det_labels, None
 
 class MaskTestMixin(object):
 
@@ -144,6 +194,43 @@ class MaskTestMixin(object):
                 if self.with_shared_head:
                     mask_feats = self.shared_head(mask_feats)
                 mask_pred = self.mask_head(mask_feats)
+                # convert to numpy array to save memory
+                aug_masks.append(mask_pred.sigmoid().cpu().numpy())
+            merged_masks = merge_aug_masks(aug_masks, img_metas,
+                                           self.test_cfg.rcnn)
+
+            ori_shape = img_metas[0][0]['ori_shape']
+            segm_result = self.mask_head.get_seg_masks(
+                merged_masks,
+                det_bboxes,
+                det_labels,
+                self.test_cfg.rcnn,
+                ori_shape,
+                scale_factor=1.0,
+                rescale=False)
+        return segm_result
+
+
+    def aug_mulit_test_mask(self, feats, img_metas, det_bboxes, det_labels, num_stage):
+        mask_roi_extractor = self.mask_roi_extractor[num_stage]
+        mask_head = self.mask_head[num_stage]
+        if det_bboxes.shape[0] == 0:
+            segm_result = [[] for _ in range(self.mask_head.num_classes - 1)]
+        else:
+            aug_masks = []
+            for x, img_meta in zip(feats, img_metas):
+                img_shape = img_meta[0]['img_shape']
+                scale_factor = img_meta[0]['scale_factor']
+                flip = img_meta[0]['flip']
+                _bboxes = bbox_mapping(det_bboxes[:, :4], img_shape,
+                                       scale_factor, flip)
+                mask_rois = bbox2roi([_bboxes])
+                mask_feats = mask_roi_extractor(
+                    x[:len(mask_roi_extractor.featmap_strides)],
+                    mask_rois)
+                if self.with_shared_head:
+                    mask_feats = self.shared_head(mask_feats)
+                mask_pred = mask_head(mask_feats)
                 # convert to numpy array to save memory
                 aug_masks.append(mask_pred.sigmoid().cpu().numpy())
             merged_masks = merge_aug_masks(aug_masks, img_metas,
