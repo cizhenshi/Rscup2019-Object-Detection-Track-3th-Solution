@@ -190,7 +190,7 @@ test_cfg = dict(
         min_bbox_size=0),
     rcnn=dict(
         score_thr=0.05,
-        nms=dict(type='nms', iou_thr=0.5),
+        nms=dict(type='nms', iou_thr=0.3),
         max_per_img=1000,
         mask_thr_binary=0.5),
     keep_all_stages=False)
@@ -230,7 +230,7 @@ data = dict(
         type=dataset_type,
         ann_file=data_root + 'annotation/annos_rscup_test.json',
         img_prefix=data_root + 'test',
-        img_scale=((512, 512), (256, 256)),
+        img_scale=((300, 300), (512, 512), (800, 800)),
         # img_scale=(512, 512),
         img_norm_cfg=img_norm_cfg,
         size_divisor=32,

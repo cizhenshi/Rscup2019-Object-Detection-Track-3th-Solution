@@ -12,7 +12,7 @@ from mmdet.core import (build_assigner, bbox2roi, bbox2result, build_sampler,
 
 
 @DETECTORS.register_module
-class CascadeRCNN(BaseDetector, RPNTestMixin, BBoxTestMixin):
+class CascadeRCNN(BaseDetector, RPNTestMixin, BBoxTestMixin,MaskTestMixin):
 
     def __init__(self,
                  num_stages,
@@ -379,9 +379,8 @@ class CascadeRCNN(BaseDetector, RPNTestMixin, BBoxTestMixin):
 
         proposal_list = self.aug_test_rpn(
             self.extract_feats(imgs), img_metas, self.test_cfg.rpn)
-        det_bboxes, det_labels, segm_results = self.multi_test(self.extract_feats(imgs), img_metas, proposal_list,
+        det_bboxes, det_labels = self.multi_bboxes_test(self.extract_feats(imgs), img_metas, proposal_list,
                                                   self.test_cfg.rcnn, rescale)
-
         if rescale:
             _det_bboxes = det_bboxes
         else:
@@ -391,10 +390,10 @@ class CascadeRCNN(BaseDetector, RPNTestMixin, BBoxTestMixin):
                                    self.bbox_head[-1].num_classes)
 
         # det_bboxes always keep the original scale
-        # if self.with_mask:
-        #     segm_results = self.aug_test_mask(
-        #         self.extract_feats(imgs), img_metas, det_bboxes, det_labels)
-        return bbox_results
+        if self.with_mask:
+            segm_results = self.multi_masks_test(
+                self.extract_feats(imgs), img_metas, det_bboxes, det_labels)
+        return (bbox_results, segm_results)
 
 
     def show_result(self, data, result, img_norm_cfg, **kwargs):

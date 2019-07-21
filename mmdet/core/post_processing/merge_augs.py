@@ -37,6 +37,34 @@ def merge_aug_proposals(aug_proposals, img_metas, rpn_test_cfg):
     merged_proposals = merged_proposals[order, :]
     return merged_proposals
 
+def merge_aug_bboxes_noreduce(aug_bboxes, aug_scores, img_metas, rcnn_test_cfg):
+    """Merge augmented detection bboxes and scores.
+
+    Args:
+        aug_bboxes (list[Tensor]): shape (n, 4*#class)
+        aug_scores (list[Tensor] or None): shape (n, #class)
+        img_shapes (list[Tensor]): shape (3, ).
+        rcnn_test_cfg (dict): rcnn test config.
+
+    Returns:
+        tuple: (bboxes, scores)
+    """
+    recovered_bboxes = []
+    for bboxes, img_info in zip(aug_bboxes, img_metas):
+        img_shape = img_info[0]['img_shape']
+        scale_factor = img_info[0]['scale_factor']
+        flip = img_info[0]['flip']
+        bboxes = bbox_mapping_back(bboxes, img_shape, scale_factor, flip)
+        recovered_bboxes.append(bboxes)
+    bboxes = torch.cat(recovered_bboxes)
+    print(bboxes.shape)
+    if aug_scores is None:
+        return bboxes
+    else:
+        scores = torch.cat(aug_scores)
+        return bboxes, scores
+
+
 
 def merge_aug_bboxes(aug_bboxes, aug_scores, img_metas, rcnn_test_cfg):
     """Merge augmented detection bboxes and scores.
