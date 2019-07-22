@@ -4,7 +4,8 @@ import torch.nn.functional as F
 from mmdet.ops import sigmoid_focal_loss as _sigmoid_focal_loss
 from .utils import weight_reduce_loss
 from ..registry import LOSSES
-
+import torch
+from icecream import ic
 
 # This method is only for debugging
 def py_sigmoid_focal_loss(pred,
@@ -41,6 +42,30 @@ def sigmoid_focal_loss(pred,
     loss = weight_reduce_loss(loss, weight, reduction, avg_factor)
     return loss
 
+def weighted_focal_loss(pred,
+                       target,
+                       weight=None,
+                       gamma=2.0,
+                       alpha=0.25,
+                       reduction='mean',
+                       avg_factor=None):
+    # Function.apply does not accept keyword arguments, so the decorator
+    # "weighted_loss" is not applicable
+    loss = _sigmoid_focal_loss(pred, target, gamma, alpha)
+    # TODO: find a proper way to handle the shape of weight
+    weight = loss.new(target.shape).fill_(1)
+    # large-vehicle
+    weight[target == 11] = 0.5
+    # small-vehicle
+    weight[target == 17] = 0.1
+    # ship
+    weight[target == 10] = 0.25
+    if weight is not None:
+        weight = weight.view(-1, 1)
+    loss = weight_reduce_loss(loss, weight, reduction, avg_factor)
+    return loss
+
+
 
 @LOSSES.register_module
 class FocalLoss(nn.Module):
@@ -52,7 +77,7 @@ class FocalLoss(nn.Module):
                  reduction='mean',
                  loss_weight=1.0):
         super(FocalLoss, self).__init__()
-        assert use_sigmoid is True, 'Only sigmoid focal loss supported now.'
+        #assert use_sigmoid is True, 'Only sigmoid focal loss supported now.'
         self.use_sigmoid = use_sigmoid
         self.gamma = gamma
         self.alpha = alpha
@@ -78,5 +103,12 @@ class FocalLoss(nn.Module):
                 reduction=reduction,
                 avg_factor=avg_factor)
         else:
-            raise NotImplementedError
+            loss_cls = self.loss_weight * weighted_focal_loss(
+                pred,
+                target,
+                weight,
+                gamma=self.gamma,
+                alpha=self.alpha,
+                reduction=reduction,
+                avg_factor=avg_factor)
         return loss_cls
