@@ -202,6 +202,7 @@ test_cfg = dict(
 dataset_type = 'CocoDataset'
 data_root = './data/rscup/'
 aug_root = "./data/rscup/aug/"
+other_aug_root = "./data/rscup/otheraug/"
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 data = dict(
@@ -209,9 +210,27 @@ data = dict(
     workers_per_gpu=4,
     train=dict(
         type=dataset_type,
-        ann_file=(data_root + 'annotation/annos_rscup_train.json', aug_root + 'annos_rscup_airport.json', data_root +
-                  'annotation/annos_rscup_background.json'),
-        img_prefix=(data_root + 'train/', aug_root + "airport/", data_root + "background/"),
+        ann_file=(data_root + 'annotation/annos_rscup_train.json',
+                  aug_root + 'annos_rscup_airport.json',
+                  other_aug_root + "annos_rscup_baseball-diamond.json",
+                  other_aug_root + "annos_rscup_basketball-court.json",
+                  other_aug_root + "annos_rscup_container-crane.json",
+                  other_aug_root + "annos_rscup_helicopter.json",
+                  other_aug_root + "annos_rscup_helipad.json",
+                  other_aug_root + "annos_rscup_helipad_ship.json",
+                  other_aug_root + "annos_rscup_roundabout.json",
+                  other_aug_root + "annos_rscup_soccer-ball-field_ground-track-field.json",
+        ),
+        img_prefix=(data_root + 'train/',
+                    aug_root + "airport/",
+                    other_aug_root + "baseball-diamond",
+                    other_aug_root + "basketball-court",
+                    other_aug_root + "container-crane",
+                    other_aug_root + "helicopter",
+                    other_aug_root + "helipad",
+                    other_aug_root + "helipad_ship",
+                    other_aug_root + "roundabout",
+                    other_aug_root + "soccer-ball-field_ground-track-field"),
         img_scale=(512, 512),
         img_norm_cfg=img_norm_cfg,
         size_divisor=32,
@@ -242,7 +261,7 @@ data = dict(
         with_label=False,
         test_mode=True))
 # optimizer
-optimizer = dict(type='SGD', lr=6e-3, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='SGD', lr=1e-2, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # learning policy
 lr_config = dict(
@@ -264,7 +283,7 @@ log_config = dict(
 total_epochs = 12
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = './work_dirs/htc_deform_cas'
+work_dir = './work_dirs/htc_deform_cas_newdata'
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
