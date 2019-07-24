@@ -10,7 +10,7 @@ from mmdet.core import get_classes
 from mmdet.datasets import to_tensor
 from mmdet.datasets.transforms import ImageTransform
 from mmdet.models import build_detector
-
+from icecream import ic
 
 def init_detector(config, checkpoint=None, device='cuda:0'):
     """Initialize a detector from config file.
@@ -70,6 +70,8 @@ def inference_detector(model, imgs):
 
 def _prepare_data(img, img_transform, cfg, device):
     ori_shape = img.shape
+    ic(ori_shape)
+    ic(cfg.data.test.img_scale)
     img, img_shape, pad_shape, scale_factor = img_transform(
         img,
         scale=cfg.data.test.img_scale,

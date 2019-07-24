@@ -53,15 +53,13 @@ def weighted_focal_loss(pred,
     # "weighted_loss" is not applicable
     loss = _sigmoid_focal_loss(pred, target, gamma, alpha)
     # TODO: find a proper way to handle the shape of weight
-    weight = loss.new(target.shape).fill_(1)
+    weight = loss.new(19).fill_(1)
+    weight[11] = 0.5
+    weight[17] = 0.1
+    weight[10] = 0.25
     # large-vehicle
-    weight[target == 11] = 0.5
     # small-vehicle
-    weight[target == 17] = 0.1
     # ship
-    weight[target == 10] = 0.25
-    if weight is not None:
-        weight = weight.view(-1, 1)
     loss = weight_reduce_loss(loss, weight, reduction, avg_factor)
     return loss
 

@@ -9,7 +9,7 @@ from ..registry import LOSSES
 def cross_entropy(pred, label, weight=None, reduction='mean', avg_factor=None):
     # element-wise losses
     loss = F.cross_entropy(pred, label, reduction='none')
-
+    
     # apply weights and do the reduction
     if weight is not None:
         weight = weight.float()

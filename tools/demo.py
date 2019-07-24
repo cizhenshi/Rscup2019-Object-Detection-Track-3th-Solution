@@ -1,5 +1,5 @@
-from mmdet.apis.multi_inference import init_detector, inference_detector, show_result
-#from mmdet.apis.inference import init_detector, inference_detector, show_result
+# from mmdet.apis.multi_inference import init_detector, inference_detector, show_result
+from mmdet.apis.inference import init_detector, inference_detector, show_result
 import os
 import argparse
 import sys

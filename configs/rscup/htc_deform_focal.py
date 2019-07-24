@@ -46,7 +46,7 @@ model = dict(
             in_channels=256,
             fc_out_channels=1024,
             roi_feat_size=7,
-            num_classes=20,
+            num_classes=19,
             target_means=[0., 0., 0., 0.],
             target_stds=[0.1, 0.1, 0.2, 0.2],
             reg_class_agnostic=True,
@@ -57,18 +57,17 @@ model = dict(
                 alpha=0.25,
                 loss_weight=1.0),
             loss_bbox=dict(
-                type='BalancedL1Loss',
-                alpha=0.5,
-                gamma=1.5,
+                type='SmoothL1Loss',
                 beta=1.0,
                 loss_weight=1.0)),
+
         dict(
             type='SharedFCBBoxHead',
             num_fcs=2,
             in_channels=256,
             fc_out_channels=1024,
             roi_feat_size=7,
-            num_classes=20,
+            num_classes=19,
             target_means=[0., 0., 0., 0.],
             target_stds=[0.05, 0.05, 0.1, 0.1],
             reg_class_agnostic=True,
@@ -79,9 +78,7 @@ model = dict(
                 alpha=0.25,
                 loss_weight=1.0),
             loss_bbox=dict(
-                type='BalancedL1Loss',
-                alpha=0.5,
-                gamma=1.5,
+                type='SmoothL1Loss',
                 beta=1.0,
                 loss_weight=1.0)),
         dict(
@@ -90,7 +87,7 @@ model = dict(
             in_channels=256,
             fc_out_channels=1024,
             roi_feat_size=7,
-            num_classes=20,
+            num_classes=19,
             target_means=[0., 0., 0., 0.],
             target_stds=[0.033, 0.033, 0.067, 0.067],
             reg_class_agnostic=True,
@@ -101,9 +98,7 @@ model = dict(
                 alpha=0.25,
                 loss_weight=1.0),
             loss_bbox=dict(
-                type='BalancedL1Loss',
-                alpha=0.5,
-                gamma=1.5,
+                type='SmoothL1Loss',
                 beta=1.0,
                 loss_weight=1.0))
     ],
@@ -117,7 +112,7 @@ model = dict(
         num_convs=4,
         in_channels=256,
         conv_out_channels=256,
-        num_classes=20,
+        num_classes=19,
         loss_mask=dict(
             type='CrossEntropyLoss', use_mask=True, loss_weight=1.0)))
 # model training and testing settings
@@ -149,21 +144,32 @@ train_cfg = dict(
         dict(
             assigner=dict(
                 type='MaxIoUAssigner',
+                pos_iou_thr=0.4,
+                neg_iou_thr=0.4,
+                min_pos_iou=0.4,
+                ignore_iof_thr=-1),
+            sampler=dict(
+                type='RandomSampler',
+                num=512,
+                pos_fraction=0.25,
+                neg_pos_ub=-1,
+                add_gt_as_proposals=True),
+            mask_size=28,
+            pos_weight=-1,
+            debug=False),
+        dict(
+            assigner=dict(
+                type='MaxIoUAssigner',
                 pos_iou_thr=0.5,
                 neg_iou_thr=0.5,
                 min_pos_iou=0.5,
                 ignore_iof_thr=-1),
             sampler=dict(
-                type='CombinedSampler',
+                type='RandomSampler',
                 num=512,
                 pos_fraction=0.25,
-                add_gt_as_proposals=True,
-                pos_sampler=dict(type='InstanceBalancedPosSampler'),
-                neg_sampler=dict(
-                    type='IoUBalancedNegSampler',
-                    floor_thr=-1,
-                    floor_fraction=0,
-                    num_bins=3)),
+                neg_pos_ub=-1,
+                add_gt_as_proposals=True),
             mask_size=28,
             pos_weight=-1,
             debug=False),
@@ -175,42 +181,16 @@ train_cfg = dict(
                 min_pos_iou=0.6,
                 ignore_iof_thr=-1),
             sampler=dict(
-                type='CombinedSampler',
+                type='RandomSampler',
                 num=512,
                 pos_fraction=0.25,
-                add_gt_as_proposals=True,
-                pos_sampler=dict(type='InstanceBalancedPosSampler'),
-                neg_sampler=dict(
-                    type='IoUBalancedNegSampler',
-                    floor_thr=-1,
-                    floor_fraction=0,
-                    num_bins=3)),
-            mask_size=28,
-            pos_weight=-1,
-            debug=False),
-        dict(
-            assigner=dict(
-                type='MaxIoUAssigner',
-                pos_iou_thr=0.7,
-                neg_iou_thr=0.7,
-                min_pos_iou=0.7,
-                ignore_iof_thr=-1),
-            sampler=dict(
-                type='CombinedSampler',
-                num=512,
-                pos_fraction=0.25,
-                add_gt_as_proposals=True,
-                pos_sampler=dict(type='InstanceBalancedPosSampler'),
-                neg_sampler=dict(
-                    type='IoUBalancedNegSampler',
-                    floor_thr=-1,
-                    floor_fraction=0,
-                    num_bins=3)),
+                neg_pos_ub=-1,
+                add_gt_as_proposals=True),
             mask_size=28,
             pos_weight=-1,
             debug=False)
     ],
-    stage_loss_weights=[1, 0.5, 0.25])
+    stage_loss_weights=[0.5, 1, 0.25])
 test_cfg = dict(
     rpn=dict(
         nms_across_levels=False,
@@ -229,6 +209,7 @@ test_cfg = dict(
 dataset_type = 'CocoDataset'
 data_root = './data/rscup/'
 aug_root = "./data/rscup/aug/"
+other_aug_root = "./data/rscup/otheraug/"
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 data = dict(
@@ -236,9 +217,27 @@ data = dict(
     workers_per_gpu=4,
     train=dict(
         type=dataset_type,
-        ann_file=(data_root + 'annotation/annos_rscup_train.json', aug_root + 'annos_rscup_airport.json', data_root +
-                  'annotation/annos_rscup_background.json'),
-        img_prefix=(data_root + 'train/', aug_root + "airport/", data_root + "background/"),
+        ann_file=(data_root + 'annotation/annos_rscup_train.json',
+                  aug_root + 'annos_rscup_airport.json',
+                  other_aug_root + "annos_rscup_baseball-diamond.json",
+                  other_aug_root + "annos_rscup_basketball-court.json",
+                  other_aug_root + "annos_rscup_container-crane.json",
+                  other_aug_root + "annos_rscup_helicopter.json",
+                  other_aug_root + "annos_rscup_helipad.json",
+                  other_aug_root + "annos_rscup_helipad_ship.json",
+                  other_aug_root + "annos_rscup_roundabout.json",
+                  other_aug_root + "annos_rscup_soccer-ball-field_ground-track-field.json",
+        ),
+        img_prefix=(data_root + 'train/',
+                    aug_root + "airport/",
+                    other_aug_root + "baseball-diamond",
+                    other_aug_root + "basketball-court",
+                    other_aug_root + "container-crane",
+                    other_aug_root + "helicopter",
+                    other_aug_root + "helipad",
+                    other_aug_root + "helipad_ship",
+                    other_aug_root + "roundabout",
+                    other_aug_root + "soccer-ball-field_ground-track-field"),
         img_scale=(512, 512),
         img_norm_cfg=img_norm_cfg,
         size_divisor=32,
@@ -259,8 +258,8 @@ data = dict(
         with_label=True),
     test=dict(
         type=dataset_type,
-        ann_file=data_root + 'annotation/annos_rscup_val.json',
-        img_prefix=data_root + 'val',
+        ann_file='./data/rscup/annotation/annos_rscup_test.json',
+        img_prefix='./data/rscup/test',
         img_scale=(512, 512),
         img_norm_cfg=img_norm_cfg,
         size_divisor=32,
@@ -269,7 +268,7 @@ data = dict(
         with_label=False,
         test_mode=True))
 # optimizer
-optimizer = dict(type='SGD', lr=6e-3, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='SGD', lr=9e-3, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # learning policy
 lr_config = dict(

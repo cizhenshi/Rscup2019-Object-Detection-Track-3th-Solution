@@ -6,8 +6,8 @@ from .. import builder
 from ..registry import DETECTORS
 from mmdet.core import (bbox2roi, bbox2result, build_assigner, build_sampler,
                         merge_aug_masks)
-
-
+from icecream import ic
+import time
 @DETECTORS.register_module
 class HybridTaskCascade(CascadeRCNN):
 
@@ -262,19 +262,21 @@ class HybridTaskCascade(CascadeRCNN):
                 with torch.no_grad():
                     proposal_list = self.bbox_head[i].refine_bboxes(
                         rois, roi_labels, bbox_pred, pos_is_gts, img_meta)
-
         return losses
 
     def simple_test(self, img, img_meta, proposals=None, rescale=False):
+        ic(len(img))
         x = self.extract_feat(img)
+        ic(len(x))
+        ic(x[0].shape)
         proposal_list = self.simple_test_rpn(
             x, img_meta, self.test_cfg.rpn) if proposals is None else proposals
-
+        ic(len(proposal_list))
         if self.with_semantic:
             _, semantic_feat = self.semantic_head(x)
         else:
             semantic_feat = None
-
+        ic(proposal_list.shape)
         img_shape = img_meta[0]['img_shape']
         ori_shape = img_meta[0]['ori_shape']
         scale_factor = img_meta[0]['scale_factor']
@@ -286,6 +288,7 @@ class HybridTaskCascade(CascadeRCNN):
         rcnn_test_cfg = self.test_cfg.rcnn
 
         rois = bbox2roi(proposal_list)
+        ic(rois.shape)
         for i in range(self.num_stages):
             bbox_head = self.bbox_head[i]
             cls_score, bbox_pred = self._bbox_forward_test(
@@ -336,10 +339,11 @@ class HybridTaskCascade(CascadeRCNN):
             scale_factor,
             rescale=rescale,
             cfg=rcnn_test_cfg)
+        ic(det_bboxes.shape)
         bbox_result = bbox2result(det_bboxes, det_labels,
                                   self.bbox_head[-1].num_classes)
         ms_bbox_result['ensemble'] = bbox_result
-
+        ic(bbox_result.shape)
         if self.with_mask:
             if det_bboxes.shape[0] == 0:
                 segm_result = [
@@ -389,7 +393,7 @@ class HybridTaskCascade(CascadeRCNN):
                 }
             else:
                 results = ms_bbox_result
-
+        ic(len(results[0][0].shape))
         return results
 
     def aug_test(self, img, img_meta, proposals=None, rescale=False):
