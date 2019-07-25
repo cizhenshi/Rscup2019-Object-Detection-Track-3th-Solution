@@ -273,15 +273,12 @@ data = dict(
         with_label=False,
         test_mode=True))
 # optimizer
-optimizer = dict(type='SGD', lr=1e-2, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='SGD', lr=6e-4, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # learning policy
 lr_config = dict(
     policy='step',
-    warmup='linear',
-    warmup_iters=500,
-    warmup_ratio=1.0 / 3,
-    step=[8, 11])
+    step=[3, 4])
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
@@ -292,10 +289,10 @@ log_config = dict(
     ])
 # yapf:enable
 # runtime settings
-total_epochs = 12
+total_epochs = 5
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = './work_dirs/htc_deform_cas_newdata'
-load_from = None
+load_from = "./work_dirs/epoch12.pth"
 resume_from = None
 workflow = [('train', 1)]
