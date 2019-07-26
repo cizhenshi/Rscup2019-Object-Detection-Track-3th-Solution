@@ -109,6 +109,16 @@ def build_optimizer(model, optimizer_cfg):
         norm_decay_mult = paramwise_options.get('norm_decay_mult', 1.)
         # set param-wise lr and weight decay
         params = []
+
+        ##
+        if paramwise_options['nofreeze'] != "all":
+            print("freeze some layer")
+            for name, param in model.named_parameters():
+                if name.split(".")[0] != paramwise_options['nofreeze']:
+                    param.requires_grad = False
+                    print(name)
+        ##
+
         for name, param in model.named_parameters():
             param_group = {'params': [param]}
             if not param.requires_grad:

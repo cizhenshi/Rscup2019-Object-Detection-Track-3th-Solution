@@ -15,7 +15,6 @@ from mmdet.core import results2json, coco_eval, wrap_fp16_model
 from mmdet.datasets import build_dataloader, build_dataset
 from mmdet.models import build_detector
 
-
 def single_gpu_test(model, data_loader, show=False):
     model.eval()
     results = []
@@ -25,11 +24,12 @@ def single_gpu_test(model, data_loader, show=False):
         with torch.no_grad():
             result = model(return_loss=False, rescale=not show, **data)
         results.append(result)
+        # results += result
 
         if show:
             model.module.show_result(data, result, dataset.img_norm_cfg)
-
-        batch_size = data['img'][0].size(0)
+        # batch_size = data['img'][0].data[0].size(0)
+        batch_size = data['img'][0].data.size()[0]
         for _ in range(batch_size):
             prog_bar.update()
     return results
@@ -150,7 +150,7 @@ def main():
     dataset = build_dataset(cfg.data.test)
     data_loader = build_dataloader(
         dataset,
-        imgs_per_gpu=2,
+        imgs_per_gpu=1,
         workers_per_gpu=cfg.data.workers_per_gpu,
         dist=distributed,
         shuffle=False)
