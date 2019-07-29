@@ -67,6 +67,7 @@ class GARPNHead(GuidedAnchorHead):
                           cfg,
                           rescale=False):
         mlvl_proposals = []
+        print(cfg.min_bbox_size)
         for idx in range(len(cls_scores)):
             rpn_cls_score = cls_scores[idx]
             rpn_bbox_pred = bbox_preds[idx]

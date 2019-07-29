@@ -120,6 +120,7 @@ def show_result(img, result, class_names, score_thr=0.3, out_file=None):
         bbox_result, segm_result = result
     else:
         bbox_result, segm_result = result, None
+    ic(bbox_result)
     bboxes = np.vstack(bbox_result)
     # draw segmentation masks
     if segm_result is not None:
@@ -130,11 +131,14 @@ def show_result(img, result, class_names, score_thr=0.3, out_file=None):
             mask = maskUtils.decode(segms[i]).astype(np.bool)
             img[mask] = img[mask] * 0.5 + color_mask * 0.5
     # draw bounding boxes
-    labels = [
-        np.full(bbox.shape[0], i, dtype=np.int32)
-        for i, bbox in enumerate(bbox_result)
-    ]
-    labels = np.concatenate(labels)
+    # labels = [
+    #     np.full(bbox.shape[0], i, dtype=np.int32)
+    #     for i, bbox in enumerate(bbox_result)
+    # ]
+    labels = np.array([0 for i in range(len(bbox_result))])
+    ic(bboxes.shape)
+    # labels = np.concatenate(labels)
+    ic(len(labels))
     mmcv.imshow_det_bboxes(
         img.copy(),
         bboxes,

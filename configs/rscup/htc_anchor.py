@@ -1,5 +1,7 @@
 # model settings
 fp16 = dict(loss_scale=512.)
+# norm_cfg = dict(type='GN', num_groups=32, requires_grad=True)
+norm_cfg = dict(type='SyncBN', requires_grad=True)
 model = dict(
     type='HybridTaskCascade',
     num_stages=3,
@@ -143,11 +145,16 @@ train_cfg = dict(
                 min_pos_iou=0.4,
                 ignore_iof_thr=-1),
             sampler=dict(
-                type='RandomSampler',
+                type='CombinedSampler',
                 num=512,
                 pos_fraction=0.25,
-                neg_pos_ub=-1,
-                add_gt_as_proposals=True),
+                add_gt_as_proposals=True,
+                pos_sampler=dict(type='InstanceBalancedPosSampler'),
+                neg_sampler=dict(
+                    type='IoUBalancedNegSampler',
+                    floor_thr=-1,
+                    floor_fraction=0,
+                    num_bins=3)),
             mask_size=28,
             pos_weight=-1,
             debug=False),
@@ -159,11 +166,16 @@ train_cfg = dict(
                 min_pos_iou=0.5,
                 ignore_iof_thr=-1),
             sampler=dict(
-                type='RandomSampler',
+                type='CombinedSampler',
                 num=512,
                 pos_fraction=0.25,
-                neg_pos_ub=-1,
-                add_gt_as_proposals=True),
+                add_gt_as_proposals=True,
+                pos_sampler=dict(type='InstanceBalancedPosSampler'),
+                neg_sampler=dict(
+                    type='IoUBalancedNegSampler',
+                    floor_thr=-1,
+                    floor_fraction=0,
+                    num_bins=3)),
             mask_size=28,
             pos_weight=-1,
             debug=False),
@@ -175,11 +187,16 @@ train_cfg = dict(
                 min_pos_iou=0.6,
                 ignore_iof_thr=-1),
             sampler=dict(
-                type='RandomSampler',
+                type='CombinedSampler',
                 num=512,
                 pos_fraction=0.25,
-                neg_pos_ub=-1,
-                add_gt_as_proposals=True),
+                add_gt_as_proposals=True,
+                pos_sampler=dict(type='InstanceBalancedPosSampler'),
+                neg_sampler=dict(
+                    type='IoUBalancedNegSampler',
+                    floor_thr=-1,
+                    floor_fraction=0,
+                    num_bins=3)),
             mask_size=28,
             pos_weight=-1,
             debug=False)
@@ -252,8 +269,8 @@ data = dict(
         with_label=True),
     test=dict(
         type=dataset_type,
-        ann_file='./data/rscup/annotation/annos_rscup_val.json',
-        img_prefix='./data/rscup/val',
+        ann_file='./data/rscup/annotation/annos_rscup_test.json',
+        img_prefix='./data/rscup/test',
         img_scale=(512, 512),
         img_norm_cfg=img_norm_cfg,
         size_divisor=32,
@@ -284,7 +301,7 @@ log_config = dict(
 total_epochs = 12
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = './work_dirs/htc_deform_focal'
+work_dir = './work_dirs/htc_sy'
 load_from = None
 resume_from = None
 workflow = [('train', 1)]

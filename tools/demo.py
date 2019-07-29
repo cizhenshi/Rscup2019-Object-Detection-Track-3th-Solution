@@ -22,17 +22,10 @@ def main():
   checkpoint_file = args.checkpoint
   model = init_detector(config_file, checkpoint_file)
   print(model.CLASSES)
-  img = './data/rscup/debug/6.jpg'
+  img = './result/demo/7.jpg'
   result = inference_detector(model, img)
-  for name, param in model.named_parameters():
-      if name.split('.')[0] != 'rpn_head':
-          param.requires_grad = False
-      if param.requires_grad:
-          print("requires_grad: True ", name)
-      else:
-          print("requires_grad: False ", name)
-  savename = "./result/demo/pic_det2.png"
-  show_result(img, result, model.CLASSES, score_thr=0.3, out_file=savename)
+  savename = "./result/demo/pic_det7.png"
+  show_result(img, result, ['o'], score_thr=0.0, out_file=savename)
 
 if __name__ == '__main__':
     main()
