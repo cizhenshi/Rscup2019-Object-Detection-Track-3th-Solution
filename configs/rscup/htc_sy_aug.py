@@ -122,7 +122,7 @@ train_cfg = dict(
             ignore_iof_thr=-1),
         sampler=dict(
             type='RandomSampler',
-            num=256,
+            num=512,
             pos_fraction=0.5,
             neg_pos_ub=-1,
             add_gt_as_proposals=False),
@@ -238,7 +238,7 @@ data = dict(
                   other_aug_root + "annos_rscup_helipad_ship.json",
                   other_aug_root + "annos_rscup_roundabout.json",
                   other_aug_root + "annos_rscup_soccer-ball-field_ground-track-field.json",
-                  data_root + 'annotation/annos_rscup_pesudo.json'),
+        ),
         img_prefix=(data_root + 'train/',
                     aug_root + "airport/",
                     other_aug_root + "baseball-diamond",
@@ -248,8 +248,7 @@ data = dict(
                     other_aug_root + "helipad",
                     other_aug_root + "helipad_ship",
                     other_aug_root + "roundabout",
-                    other_aug_root + "soccer-ball-field_ground-track-field",
-                    data_root + 'pesudo/'),
+                    other_aug_root + "soccer-ball-field_ground-track-field"),
         img_scale=(512, 512),
         img_norm_cfg=img_norm_cfg,
         size_divisor=32,
@@ -280,7 +279,7 @@ data = dict(
         with_label=False,
         test_mode=True))
 # optimizer
-optimizer = dict(type='SGD', lr=9e-4, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='SGD', lr=9e-3, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # learning policy
 lr_config = dict(
@@ -288,7 +287,7 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[1])
+    step=[16, 22])
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
@@ -299,10 +298,10 @@ log_config = dict(
     ])
 # yapf:enable
 # runtime settings
-total_epochs = 2
+total_epochs = 24
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = './work_dirs/htc_sy_ft'
-load_from = "./work_dirs/htc_sy/epoch_12.pth"
+work_dir = './work_dirs/htc_sy_aug'
+load_from = None
 resume_from = None
 workflow = [('train', 1)]

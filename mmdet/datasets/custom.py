@@ -10,6 +10,9 @@ from .transforms import (ImageTransform, BboxTransform, MaskTransform,
                          SegMapTransform, Numpy2Tensor)
 from .utils import to_tensor, random_scale
 from .extra_aug import ExtraAugmentation
+import imgaug.augmenters as iaa
+import random
+
 
 
 @DATASETS.register_module
@@ -109,7 +112,7 @@ class CustomDataset(Dataset):
         # set group flag for the sampler
         if not self.test_mode:
             self._set_group_flag()
-            self._set_class_indices()
+            # self._set_class_indices()
         # transforms
         self.img_transform = ImageTransform(
             size_divisor=self.size_divisor, **self.img_norm_cfg)
@@ -129,7 +132,9 @@ class CustomDataset(Dataset):
 
 
         # augment image and bbox
-        self.AUG = False
+        self.AUG = True
+        if(self.AUG):
+            print("AUG mode is used!")
 
 
 
@@ -211,7 +216,6 @@ class CustomDataset(Dataset):
         polys = np.dot(polys, rotation_matrix)
         img = aug.augment_image(img)
         h, w, _ = img.shape
-        print(img.shape)
         polys[:, :, 0] += w / 2
         polys[:, :, 1] += h / 2
 
@@ -220,7 +224,7 @@ class CustomDataset(Dataset):
         ymin = np.min(polys[:, :, 1], axis=1)
         ymax = np.max(polys[:, :, 1], axis=1)
 
-        boxes = np.stack(np.array([xmin, ymin, xmax, ymax], np.int32), axis=1)
+        boxes = np.stack(np.array([xmin, ymin, xmax, ymax], np.float32), axis=1)
         boxes = np.reshape(boxes, (-1, 4))
         masks = aug.augment_images(masks)
         return img, boxes, list(masks)
