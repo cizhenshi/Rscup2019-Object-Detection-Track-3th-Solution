@@ -109,6 +109,7 @@ class CustomDataset(Dataset):
         # set group flag for the sampler
         if not self.test_mode:
             self._set_group_flag()
+            self._set_class_indices()
         # transforms
         self.img_transform = ImageTransform(
             size_divisor=self.size_divisor, **self.img_norm_cfg)
@@ -129,6 +130,9 @@ class CustomDataset(Dataset):
 
         # augment image and bbox
         self.AUG = False
+
+
+
 
     def __len__(self):
         return len(self.img_infos)
@@ -160,6 +164,25 @@ class CustomDataset(Dataset):
             img_info = self.img_infos[i]
             if img_info['width'] / img_info['height'] > 1:
                 self.flag[i] = 1
+
+    def _set_class_indices(self):
+        """Set flag according to image aspect ratio.
+        Images with aspect ratio greater than 1 will be set as group 1,
+        otherwise group 0.
+        """
+
+        print("generate class_indices")
+        self.class_indices = [[] for i in range(len(self.CLASSES))]
+        print(len(self.class_indices))
+        for i in range(len(self)):
+            labels = self.get_ann_info(i)['labels']
+            for label in labels:
+                self.class_indices[label-1].append(i)
+        for i in range(len(self.class_indices)):
+            self.class_indices[i] = np.array(self.class_indices[i])
+        print("generate complete!")
+
+
 
     def _rand_another(self, idx):
         pool = np.where(self.flag == self.flag[idx])[0]
