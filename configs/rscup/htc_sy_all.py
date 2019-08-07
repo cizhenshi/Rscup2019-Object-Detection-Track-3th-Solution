@@ -229,6 +229,7 @@ data = dict(
     train=dict(
         type=dataset_type,
         ann_file=(data_root + 'annotation/annos_rscup_train.json',
+                  data_root + 'annotation/annos_rscup_s2.json',
                   aug_root + 'annos_rscup_airport.json',
                   other_aug_root + "annos_rscup_baseball-diamond.json",
                   other_aug_root + "annos_rscup_basketball-court.json",
@@ -240,6 +241,7 @@ data = dict(
                   other_aug_root + "annos_rscup_soccer-ball-field_ground-track-field.json",
         ),
         img_prefix=(data_root + 'train/',
+                    data_root + 's2/',
                     aug_root + "airport/",
                     other_aug_root + "baseball-diamond",
                     other_aug_root + "basketball-court",
