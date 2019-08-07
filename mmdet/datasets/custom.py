@@ -132,7 +132,7 @@ class CustomDataset(Dataset):
 
 
         # augment image and bbox
-        self.AUG = True
+        self.AUG = False
         if(self.AUG):
             print("AUG mode is used!")
 
