@@ -5,12 +5,12 @@ norm_cfg = dict(type='SyncBN', requires_grad=True)
 model = dict(
     type='HybridTaskCascade',
     num_stages=3,
-    pretrained='modelzoo://resnet18',
+    pretrained='modelzoo://resnet50',
     interleaved=True,
     mask_info_flow=True,
     backbone=dict(
         type='ResNet',
-        depth=18,
+        depth=50,
         num_stages=4,
         out_indices=(0, 1, 2, 3),
         frozen_stages=1,
