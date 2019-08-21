@@ -224,8 +224,8 @@ other_aug_root = "./data/rscup/otheraug/"
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 data = dict(
-    imgs_per_gpu=4,
-    workers_per_gpu=4,
+    imgs_per_gpu=6,
+    workers_per_gpu=6,
     train=dict(
         type=dataset_type,
         ann_file=(data_root + 'annotation/annos_rscup_train.json',
@@ -281,7 +281,7 @@ data = dict(
         with_label=False,
         test_mode=True))
 # optimizer
-optimizer = dict(type='SGD', lr=6e-3, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='SGD', lr=12e-3, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # learning policy
 lr_config = dict(
@@ -300,10 +300,10 @@ log_config = dict(
     ])
 # yapf:enable
 # runtime settings
-total_epochs = 10
+total_epochs = 12
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = './work_dirs/htc_res18'
+work_dir = './work_dirs/htc_res101'
 load_from = None
 resume_from = None
 workflow = [('train', 1)]
