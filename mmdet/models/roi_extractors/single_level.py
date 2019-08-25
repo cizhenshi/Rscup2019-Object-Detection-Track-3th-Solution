@@ -6,7 +6,7 @@ import torch.nn as nn
 from mmdet import ops
 from mmdet.core import force_fp32
 from ..registry import ROI_EXTRACTORS
-
+from icecream import ic
 
 @ROI_EXTRACTORS.register_module
 class SingleRoIExtractor(nn.Module):

@@ -1,5 +1,5 @@
 # model settings
-fp16 = dict(loss_scale=512.)
+# fp16 = dict(loss_scale=512.)
 # norm_cfg = dict(type='GN', num_groups=32, requires_grad=True)
 norm_cfg = dict(type='SyncBN', requires_grad=True)
 model = dict(
@@ -274,6 +274,7 @@ data = dict(
         img_scale=(512, 512),
         img_norm_cfg=img_norm_cfg,
         size_divisor=32,
+        resize_keep_ratio=True,
         flip_ratio=0,
         with_mask=True,
         with_label=False,

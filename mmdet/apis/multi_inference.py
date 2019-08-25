@@ -62,45 +62,43 @@ def inference_detector(model, imgs):
         size_divisor=cfg.data.test.size_divisor, **cfg.img_norm_cfg)
 
     device = next(model.parameters()).device  # model device
-    if not isinstance(imgs, list):
-        return _inference_single(model, imgs, img_transform, device)
-    else:
-        return _inference_generator(model, imgs, img_transform, device)
+    return _inference_single(model, imgs, img_transform, device)
 
 
-def _prepare_data(img, img_transform, cfg, device):
+def _prepare_data(img_paths, img_transform, cfg, device):
     imgs = []
     img_metas = []
-    for scale in cfg.data.test.img_scale:
+    for img_path in img_paths:
+        img = mmcv.imread(img_path)
         _img, _img_meta = _prepare_single_data(
-            img, img_transform, scale, cfg, device)
+                img, img_transform, cfg.data.test.img_scale, cfg, device)
         imgs.append(_img)
         img_metas.append(_img_meta)
-
-    data = dict(img=imgs, img_meta=img_metas)
+    imgs = torch.cat(imgs, dim=0)
+    print(imgs.shape)
+    print(len(img_metas))
+    data = dict(img=[imgs], img_meta=[img_metas])
     return data
 
 
 def _prepare_single_data(img, img_transform, scale, cfg, device):
     ori_shape = img.shape
+    print(ori_shape)
     img, img_shape, pad_shape, scale_factor = img_transform(
         img,
         scale=scale,
         keep_ratio=cfg.data.test.get('resize_keep_ratio', True))
     img = to_tensor(img).to(device).unsqueeze(0)
-    img_meta = [
-        dict(
+    img_meta =dict(
             ori_shape=ori_shape,
             img_shape=img_shape,
             pad_shape=pad_shape,
             scale_factor=scale_factor,
             flip=False)
-    ]
     return img, img_meta
 
 
 def _inference_single(model, img, img_transform, device):
-    img = mmcv.imread(img)
     data = _prepare_data(img, img_transform, model.cfg, device)
     with torch.no_grad():
         result = model(return_loss=False, rescale=True, **data)
@@ -150,7 +148,7 @@ def show_result(img, result, class_names, score_thr=0.3, out_file=None):
         img.copy(),
         bboxes,
         labels,
-        class_names=class_names,
+        class_names=None,
         score_thr=score_thr,
         show=out_file is None,
         out_file=out_file)

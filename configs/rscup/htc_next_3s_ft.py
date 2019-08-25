@@ -234,6 +234,7 @@ data = dict(
     train=dict(
         type=dataset_type,
         ann_file=(data_root + 'annotation/annos_rscup_train.json',
+                  data_root + 'annotation/annos_rscup_s2.json',
                   aug_root + 'annos_rscup_airport.json',
                   other_aug_root + "annos_rscup_baseball-diamond.json",
                   other_aug_root + "annos_rscup_basketball-court.json",
@@ -243,8 +244,9 @@ data = dict(
                   other_aug_root + "annos_rscup_helipad_ship.json",
                   other_aug_root + "annos_rscup_roundabout.json",
                   other_aug_root + "annos_rscup_soccer-ball-field_ground-track-field.json",
-        ),
+                  ),
         img_prefix=(data_root + 'train/',
+                    data_root + 's2/',
                     aug_root + "airport/",
                     other_aug_root + "baseball-diamond",
                     other_aug_root + "basketball-court",
@@ -284,7 +286,7 @@ data = dict(
         with_label=False,
         test_mode=True))
 # optimizer
-optimizer = dict(type='SGD', lr=6e-3, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='SGD', lr=6e-4, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # learning policy
 lr_config = dict(
@@ -292,7 +294,7 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[8, 11])
+    step=[1])
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
@@ -303,10 +305,10 @@ log_config = dict(
     ])
 # yapf:enable
 # runtime settings
-total_epochs = 12
+total_epochs = 2
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = './work_dirs/htc_sy_next'
+work_dir = './work_dirs/htc_next_3s_ft'
 load_from = None
 resume_from = None
 workflow = [('train', 1)]

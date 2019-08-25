@@ -19,19 +19,20 @@ def single_gpu_test(model, data_loader, show=False):
     model.eval()
     results = []
     dataset = data_loader.dataset
-    prog_bar = mmcv.ProgressBar(len(dataset))
+    prog_bar = mmcv.ProgressBar(len(data_loader))
     for i, data in enumerate(data_loader):
         with torch.no_grad():
             result = model(return_loss=False, rescale=not show, **data)
-        results.append(result)
-        # results += result
+        # results.append(result)
+        results += result
 
         if show:
             model.module.show_result(data, result, dataset.img_norm_cfg)
         # batch_size = data['img'][0].data[0].size(0)
         batch_size = data['img'][0].data.size()[0]
-        for _ in range(batch_size):
-            prog_bar.update()
+        # for _ in range(batch_size):
+        #     prog_bar.update()
+        prog_bar.update()
     return results
 
 
@@ -151,9 +152,10 @@ def main():
     data_loader = build_dataloader(
         dataset,
         imgs_per_gpu=1,
-        workers_per_gpu=cfg.data.workers_per_gpu,
+        workers_per_gpu=8,
         dist=distributed,
         shuffle=False)
+    print(len(data_loader))
 
     # build the model and load checkpoint
     model = build_detector(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)

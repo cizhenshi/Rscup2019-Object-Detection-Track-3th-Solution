@@ -8,6 +8,43 @@ from mmdet.core import (bbox2roi, bbox2result, build_assigner, build_sampler,
                         merge_aug_masks)
 from icecream import ic
 import time
+from torch.multiprocessing import Pool
+from mmdet.core import (delta2bbox, multiclass_nms, nms, bbox_target, force_fp32,
+                        auto_fp16)
+
+
+def get_det_bboxes(j, rois,
+                   scores,
+                   bbox_pred,
+                   img_shape,
+                   scale_factor,
+                   rescale=False,
+                   cfg=None):
+    target_means = [0., 0., 0., 0.],
+    target_stds = [0.033, 0.033, 0.067, 0.067]
+
+    if bbox_pred is not None:
+        bboxes = delta2bbox(rois[:, 1:], bbox_pred, target_means,
+                            target_stds, img_shape)
+    else:
+        bboxes = rois[:, 1:].clone()
+        if img_shape is not None:
+            bboxes[:, [0, 2]].clamp_(min=0, max=img_shape[1] - 1)
+            bboxes[:, [1, 3]].clamp_(min=0, max=img_shape[0] - 1)
+
+    if rescale:
+        bboxes /= scale_factor
+
+    if cfg is None:
+        return bboxes, scores
+    else:
+        det_bboxes, det_labels = multiclass_nms(bboxes, scores,
+                                                cfg.score_thr, cfg.nms,
+                                                cfg.max_per_img)
+
+        return [j, det_bboxes, det_labels]
+
+
 @DETECTORS.register_module
 class HybridTaskCascade(CascadeRCNN):
 
@@ -31,6 +68,7 @@ class HybridTaskCascade(CascadeRCNN):
         self.semantic_fusion = semantic_fusion
         self.interleaved = interleaved
         self.mask_info_flow = mask_info_flow
+        self.p = Pool(4)
 
     @property
     def with_semantic(self):
@@ -78,9 +116,12 @@ class HybridTaskCascade(CascadeRCNN):
                             semantic_feat=None):
         mask_roi_extractor = self.mask_roi_extractor[stage]
         mask_head = self.mask_head[stage]
+        ic(len(sampling_results))
+
         pos_rois = bbox2roi([res.pos_bboxes for res in sampling_results])
         mask_feats = mask_roi_extractor(x[:mask_roi_extractor.num_inputs],
                                         pos_rois)
+        ic(mask_feats.shape)
 
         # semantic feature fusion
         # element-wise sum for original features and pooled semantic features
@@ -264,24 +305,198 @@ class HybridTaskCascade(CascadeRCNN):
                         rois, roi_labels, bbox_pred, pos_is_gts, img_meta)
         return losses
 
+    def transform(self, det_bboxes, scale_factor, rescale):
+        if det_bboxes.shape[0] == 0:
+            return det_bboxes
+        else:
+            # _bboxes = (
+            #     det_bboxes[:, :4] * scale_factor
+            #     if rescale else det_bboxes)
+            if isinstance(scale_factor, float):
+                _bboxes = (det_bboxes[:, :4] * scale_factor
+                           if rescale else det_bboxes)
+            else:
+                _bboxes = (det_bboxes[:, :4] * torch.from_numpy(
+                    scale_factor).to(det_bboxes.device)
+                           if rescale else det_bboxes)
+            return _bboxes
 
+    def get_bboxes(self,
+                    rois,
+                    cls_score,
+                    bbox_pred,
+                    img_meta,
+                    rescale=False,
+                    cfg=None):
+        if isinstance(cls_score, list):
+            cls_score = sum(cls_score) / float(len(cls_score))
+        target_means = [0., 0., 0., 0.],
+        target_stds = [0.033, 0.033, 0.067, 0.067]
+        scale_factors = torch.Tensor([img_meta[j]['scale_factor'] for j in range(len(img_meta))])
+        index = rois[:, 0].clone().long()
+        scale_factor = scale_factors[index]
+        scores = F.softmax(cls_score, dim=1) if cls_score is not None else None
+        bboxes = delta2bbox(rois[:, 1:], bbox_pred, target_means, target_stds)
+        if rescale:
+            bboxes /= scale_factor.unsqueeze(1).to(bboxes.device)
+
+        return bboxes, scores
+
+    # def multi_batch_test(self, img, img_meta, proposals=None, rescale=False):
+    #     t1 = time.time()
+    #     x = self.extract_feat(img)
+    #     max_roi = self.test_cfg.rcnn.max_per_img
+    #     proposal_list = self.simple_test_rpn(
+    #         x, img_meta, self.test_cfg.rpn) if proposals is None else proposals
+    #     batch_size = len(proposal_list)
+    #     semantic_feat = None
+    #
+    #     # "ms" in variable names means multi-stage
+    #     ms_bbox_result = {}
+    #     ms_segm_result = {}
+    #     bbox_results = []
+    #     segm_results = []
+    #     ms_scores = []
+    #     rcnn_test_cfg = self.test_cfg.rcnn
+    #     rois = bbox2roi(proposal_list)
+    #     t4 = time.time()
+    #     for i in range(self.num_stages):
+    #         bbox_head = self.bbox_head[i]
+    #         cls_score, bbox_pred = self._bbox_forward_test(
+    #             i, x, rois, semantic_feat=semantic_feat)
+    #         ms_scores.append(cls_score)
+    #         if i < self.num_stages - 1:
+    #             bbox_label = cls_score.argmax(dim=1)
+    #             rois = bbox_head.regress_by_class(rois, bbox_label, bbox_pred,
+    #                                               img_meta[0])
+    #     cls_score = sum(ms_scores) / float(len(ms_scores))
+    #     det_bboxes_list = []
+    #     det_labels_list = []
+    #
+    #     results = []
+    #     tn = time.time()
+    #     for j in range(batch_size):
+    #         curr_cls_score = cls_score[j*max_roi:(j+1)*max_roi]
+    #         curr_bbox_pred = bbox_pred[j*max_roi:(j+1)*max_roi]
+    #         curr_rois = rois[j*max_roi:(j+1)*max_roi]
+    #         img_shape = img_meta[j]['img_shape']
+    #         ori_shape = img_meta[j]['ori_shape']
+    #         scale_factor = img_meta[j]['scale_factor']
+    #         results.append(self.p.apply_async(get_det_bboxes, args=(j, curr_rois.cpu(), F.softmax(curr_cls_score,
+    #                                                                                         dim=1).cpu(),
+    #                                                            curr_bbox_pred.cpu(),
+    #                                                            img_shape, scale_factor, rescale, rcnn_test_cfg)))
+    #         # det_bboxes, det_labels = self.bbox_head[-1].get_det_bboxes(
+    #         #     curr_rois,
+    #         #     curr_cls_score,
+    #         #     curr_bbox_pred,
+    #         #     img_shape,
+    #         #     scale_factor,
+    #         #     rescale=rescale,
+    #         #     cfg=rcnn_test_cfg)
+    #     boxes_list = [[] for i in range(batch_size)]
+    #     labels_list = [[] for i in range(batch_size)]
+    #     for res in results:
+    #         index, det_bboxes, det_labels = res.get()
+    #         labels_list[index] = det_labels
+    #         boxes_list[index] = det_bboxes
+    #     tw = time.time()
+    #     for j in range(batch_size):
+    #         scale_factor = img_meta[j]['scale_factor']
+    #         det_bboxes = boxes_list[j]
+    #         det_labels = labels_list[j]
+    #         det_bboxes_list.append(self.transform(det_bboxes, scale_factor, rescale).to(bbox_pred.device))
+    #         det_labels_list.append(det_labels.to(bbox_pred.device))
+    #         bbox_result = bbox2result(det_bboxes, det_labels,
+    #                                   self.bbox_head[-1].num_classes)
+    #         bbox_results.append(bbox_result)
+    #     tm = time.time()
+    #     ic(tm-tn)
+    #     # if det_bboxes.shape[0] == 0:
+    #     #     segm_result = [
+    #     #         [] for _ in range(self.mask_head[-1].num_classes - 1)
+    #     #     ]
+    #     # else:
+    #     #     # _bboxes = (
+    #     #     #     det_bboxes[:, :4] * scale_factor
+    #     #     #     if rescale else det_bboxes)
+    #     #     if isinstance(scale_factor, float):
+    #     #         _bboxes = (det_bboxes[:, :4] * scale_factor
+    #     #                    if rescale else det_bboxes)
+    #     #     else:
+    #     #         _bboxes = (det_bboxes[:, :4] * torch.from_numpy(
+    #     #             scale_factor).to(det_bboxes.device)
+    #     #                    if rescale else det_bboxes)
+    #
+    #     # mask_rois = bbox2roi([_bboxes])
+    #     ret = []
+    #     mask_rois = bbox2roi(det_bboxes_list)
+    #     if mask_rois.shape[0] == 0:
+    #         for i in range(len(det_labels_list)):
+    #             segm_result = [[] for _ in range(self.mask_head[-1].num_classes - 1)]
+    #             ms_segm_result['ensemble'] = segm_result
+    #             ms_bbox_result['ensemble'] = bbox_results[i]
+    #             results = (ms_bbox_result['ensemble'], ms_segm_result['ensemble'])
+    #             ret.append(results)
+    #         return ret
+    #     aug_masks = []
+    #     mask_roi_extractor = self.mask_roi_extractor[-1]
+    #     mask_feats = mask_roi_extractor(
+    #         x[:len(mask_roi_extractor.featmap_strides)], mask_rois)
+    #     # if self.with_semantic and 'mask' in self.semantic_fusion:
+    #     #     mask_semantic_feat = self.semantic_roi_extractor(
+    #     #         [semantic_feat], mask_rois)
+    #     #     mask_feats += mask_semantic_feat
+    #     last_feat = None
+    #     for i in range(self.num_stages):
+    #         mask_head = self.mask_head[i]
+    #         if self.mask_info_flow:
+    #             mask_pred, last_feat = mask_head(mask_feats, last_feat)
+    #         else:
+    #             mask_pred = mask_head(mask_feats)
+    #         aug_masks.append(mask_pred.sigmoid().cpu().numpy())
+    #     merged_masks = merge_aug_masks(aug_masks,
+    #                                    [img_meta] * self.num_stages,
+    #                                    self.test_cfg.rcnn)
+    #     offset = 0
+    #     for i, _bboxes in enumerate(det_bboxes_list):
+    #         ori_shape = img_meta[i]['ori_shape']
+    #         scale_factor = img_meta[i]['scale_factor']
+    #         if _bboxes.shape[0] == 0:
+    #             segm_result = [[] for _ in range(self.mask_head[-1].num_classes - 1)]
+    #         else:
+    #             length = len(_bboxes)
+    #             segm_result = self.mask_head[-1].get_seg_masks(
+    #                 merged_masks[offset:offset + length], _bboxes, det_labels_list[i], rcnn_test_cfg,
+    #                 ori_shape, scale_factor, rescale)
+    #             offset += length
+    #         segm_results.append(segm_result)
+    #     t9 = time.time()
+    #     # ic(t9 - t1)
+    #     for i in range(len(segm_results)):
+    #         ms_segm_result['ensemble'] = segm_results[i]
+    #         ms_bbox_result['ensemble'] = bbox_results[i]
+    #         results = (ms_bbox_result['ensemble'], ms_segm_result['ensemble'])
+    #         ret.append(results)
+    #     return ret
     def multi_batch_test(self, img, img_meta, proposals=None, rescale=False):
+        t1 = time.time()
         x = self.extract_feat(img)
         max_roi = self.test_cfg.rcnn.max_per_img
         proposal_list = self.simple_test_rpn(
             x, img_meta, self.test_cfg.rpn) if proposals is None else proposals
         batch_size = len(proposal_list)
-        if self.with_semantic:
-            _, semantic_feat = self.semantic_head(x)
-        else:
-            semantic_feat = None
+        semantic_feat = None
 
         # "ms" in variable names means multi-stage
         ms_bbox_result = {}
         ms_segm_result = {}
+        bbox_results = []
+        segm_results = []
         ms_scores = []
         rcnn_test_cfg = self.test_cfg.rcnn
         rois = bbox2roi(proposal_list)
+        t4 = time.time()
         for i in range(self.num_stages):
             bbox_head = self.bbox_head[i]
             cls_score, bbox_pred = self._bbox_forward_test(
@@ -291,9 +506,10 @@ class HybridTaskCascade(CascadeRCNN):
                 bbox_label = cls_score.argmax(dim=1)
                 rois = bbox_head.regress_by_class(rois, bbox_label, bbox_pred,
                                                   img_meta[0])
-
         cls_score = sum(ms_scores) / float(len(ms_scores))
-        ret = []
+        det_bboxes_list = []
+        det_labels_list = []
+        tn = time.time()
         for j in range(batch_size):
             curr_cls_score = cls_score[j*max_roi:(j+1)*max_roi]
             curr_bbox_pred = bbox_pred[j*max_roi:(j+1)*max_roi]
@@ -309,62 +525,77 @@ class HybridTaskCascade(CascadeRCNN):
                 scale_factor,
                 rescale=rescale,
                 cfg=rcnn_test_cfg)
+            det_bboxes_list.append(self.transform(det_bboxes, scale_factor, rescale))
+            det_labels_list.append(det_labels)
             bbox_result = bbox2result(det_bboxes, det_labels,
                                       self.bbox_head[-1].num_classes)
-            ms_bbox_result['ensemble'] = bbox_result
+            bbox_results.append(bbox_result)
+        tm = time.time()
+        # if det_bboxes.shape[0] == 0:
+        #     segm_result = [
+        #         [] for _ in range(self.mask_head[-1].num_classes - 1)
+        #     ]
+        # else:
+        #     # _bboxes = (
+        #     #     det_bboxes[:, :4] * scale_factor
+        #     #     if rescale else det_bboxes)
+        #     if isinstance(scale_factor, float):
+        #         _bboxes = (det_bboxes[:, :4] * scale_factor
+        #                    if rescale else det_bboxes)
+        #     else:
+        #         _bboxes = (det_bboxes[:, :4] * torch.from_numpy(
+        #             scale_factor).to(det_bboxes.device)
+        #                    if rescale else det_bboxes)
 
-
-
-            if self.with_mask:
-                if det_bboxes.shape[0] == 0:
-                    segm_result = [
-                        [] for _ in range(self.mask_head[-1].num_classes - 1)
-                    ]
-                else:
-                    _bboxes = (
-                        det_bboxes[:, :4] * scale_factor
-                        if rescale else det_bboxes)
-
-                    mask_rois = bbox2roi([_bboxes])
-                    aug_masks = []
-                    mask_roi_extractor = self.mask_roi_extractor[-1]
-                    fpn = [f[j].unsqueeze(0) for f in x[:len(mask_roi_extractor.featmap_strides)]]
-                    mask_feats = mask_roi_extractor(
-                        fpn, mask_rois)
-                    if self.with_semantic and 'mask' in self.semantic_fusion:
-                        mask_semantic_feat = self.semantic_roi_extractor(
-                            [semantic_feat], mask_rois)
-                        mask_feats += mask_semantic_feat
-                    last_feat = None
-                    for i in range(self.num_stages):
-                        mask_head = self.mask_head[i]
-                        if self.mask_info_flow:
-                            mask_pred, last_feat = mask_head(mask_feats, last_feat)
-                        else:
-                            mask_pred = mask_head(mask_feats)
-                        aug_masks.append(mask_pred.sigmoid().cpu().numpy())
-                    merged_masks = merge_aug_masks(aug_masks,
-                                                   [img_meta] * self.num_stages,
-                                                   self.test_cfg.rcnn)
-                    segm_result = self.mask_head[-1].get_seg_masks(
-                        merged_masks, _bboxes, det_labels, rcnn_test_cfg,
-                        ori_shape, scale_factor, rescale)
+        # mask_rois = bbox2roi([_bboxes])
+        ret = []
+        mask_rois = bbox2roi(det_bboxes_list)
+        if mask_rois.shape[0] == 0:
+            for i in range(len(det_labels_list)):
+                segm_result = [[] for _ in range(self.mask_head[-1].num_classes - 1)]
                 ms_segm_result['ensemble'] = segm_result
-
-            if not self.test_cfg.keep_all_stages:
-                if self.with_mask:
-                    results = (ms_bbox_result['ensemble'],
-                               ms_segm_result['ensemble'])
-                else:
-                    results = ms_bbox_result['ensemble']
+                ms_bbox_result['ensemble'] = bbox_results[i]
+                results = (ms_bbox_result['ensemble'], ms_segm_result['ensemble'])
+                ret.append(results)
+            return ret
+        aug_masks = []
+        mask_roi_extractor = self.mask_roi_extractor[-1]
+        mask_feats = mask_roi_extractor(
+            x[:len(mask_roi_extractor.featmap_strides)], mask_rois)
+        # if self.with_semantic and 'mask' in self.semantic_fusion:
+        #     mask_semantic_feat = self.semantic_roi_extractor(
+        #         [semantic_feat], mask_rois)
+        #     mask_feats += mask_semantic_feat
+        last_feat = None
+        for i in range(self.num_stages):
+            mask_head = self.mask_head[i]
+            if self.mask_info_flow:
+                mask_pred, last_feat = mask_head(mask_feats, last_feat)
             else:
-                if self.with_mask:
-                    results = {
-                        stage: (ms_bbox_result[stage], ms_segm_result[stage])
-                        for stage in ms_bbox_result
-                    }
-                else:
-                    results = ms_bbox_result
+                mask_pred = mask_head(mask_feats)
+            aug_masks.append(mask_pred.sigmoid().cpu().numpy())
+        merged_masks = merge_aug_masks(aug_masks,
+                                       [img_meta] * self.num_stages,
+                                       self.test_cfg.rcnn)
+        offset = 0
+        for i, _bboxes in enumerate(det_bboxes_list):
+            ori_shape = img_meta[i]['ori_shape']
+            scale_factor = img_meta[i]['scale_factor']
+            if _bboxes.shape[0] == 0:
+                segm_result = [[] for _ in range(self.mask_head[-1].num_classes - 1)]
+            else:
+                length = len(_bboxes)
+                segm_result = self.mask_head[-1].get_seg_masks(
+                    merged_masks[offset:offset + length], _bboxes, det_labels_list[i], rcnn_test_cfg,
+                    ori_shape, scale_factor, rescale)
+                offset += length
+            segm_results.append(segm_result)
+        t9 = time.time()
+        # ic(t9 - t1)
+        for i in range(len(segm_results)):
+            ms_segm_result['ensemble'] = segm_results[i]
+            ms_bbox_result['ensemble'] = bbox_results[i]
+            results = (ms_bbox_result['ensemble'], ms_segm_result['ensemble'])
             ret.append(results)
         return ret
 
@@ -427,7 +658,6 @@ class HybridTaskCascade(CascadeRCNN):
                 bbox_label = cls_score.argmax(dim=1)
                 rois = bbox_head.regress_by_class(rois, bbox_label, bbox_pred,
                                                   img_meta[0])
-
         cls_score = sum(ms_scores) / float(len(ms_scores))
         det_bboxes, det_labels = self.bbox_head[-1].get_det_bboxes(
             rois,
@@ -474,7 +704,6 @@ class HybridTaskCascade(CascadeRCNN):
                     merged_masks, _bboxes, det_labels, rcnn_test_cfg,
                     ori_shape, scale_factor, rescale)
             ms_segm_result['ensemble'] = segm_result
-
         if not self.test_cfg.keep_all_stages:
             if self.with_mask:
                 results = (ms_bbox_result['ensemble'],

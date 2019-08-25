@@ -1,7 +1,7 @@
 from torch.autograd import Function
 
 from .. import roi_align_cuda
-
+from icecream import ic
 
 class RoIAlignFunction(Function):
 
@@ -32,7 +32,6 @@ class RoIAlignFunction(Function):
                                    sample_num, output)
         else:
             raise NotImplementedError
-
         return output
 
     @staticmethod

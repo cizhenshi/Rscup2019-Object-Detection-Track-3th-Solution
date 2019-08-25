@@ -324,9 +324,17 @@ class CascadeRCNN(BaseDetector, RPNTestMixin, BBoxTestMixin,MaskTestMixin):
                     [] for _ in range(self.mask_head[-1].num_classes - 1)
                 ]
             else:
-                _bboxes = (
-                    det_bboxes[:, :4] * scale_factor
-                    if rescale else det_bboxes)
+                # _bboxes = (
+                #     det_bboxes[:, :4] * scale_factor
+                #     if rescale else det_bboxes)
+                if isinstance(scale_factor, float):
+                    _bboxes = (det_bboxes[:, :4] * scale_factor
+                               if rescale else det_bboxes)
+                else:
+                    _bboxes = (det_bboxes[:, :4] * torch.from_numpy(
+                        scale_factor).to(det_bboxes.device)
+                               if rescale else det_bboxes)
+
                 mask_rois = bbox2roi([_bboxes])
                 aug_masks = []
                 for i in range(self.num_stages):
