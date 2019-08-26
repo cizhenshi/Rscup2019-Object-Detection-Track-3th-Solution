@@ -490,7 +490,7 @@ if __name__ == "__main__":
     class_to_ind = dict(zip(CLASS, range(len(CLASS))))
     print(class_to_ind)
     datadir = "/home/xfr/rssid/data/val/images"
-    outdir = "/home/xfr/tt"
+    outdir = "./data/rscup"
     scale_generate_test(datadir, outdir, "test", [0.5, 1])
     increment_generate(datadir, outdir+"/annotation/annos_rscup_test.json", outdir, "test")
 
