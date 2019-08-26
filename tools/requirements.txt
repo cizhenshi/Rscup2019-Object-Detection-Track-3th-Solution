@@ -67,7 +67,7 @@ matplotlib==3.0.1
 mistune==0.7.4
 mmcv==0.2.8
 mmd==0.2.6
--e git+git@github.com:cizhenshi/mm.git@5d30d2907180eff5c4b3fc8f90771ddb16ea202d#egg=mmdet
+-e git+git@github.com:cizhenshi/mm.git@0251178e52ceda1b4dc14ac2b1c56ae87ee93ff5#egg=mmdet
 msgpack==0.5.6
 msgpack-numpy==0.4.3.2
 munch==2.3.2

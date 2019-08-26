@@ -116,12 +116,10 @@ class HybridTaskCascade(CascadeRCNN):
                             semantic_feat=None):
         mask_roi_extractor = self.mask_roi_extractor[stage]
         mask_head = self.mask_head[stage]
-        ic(len(sampling_results))
 
         pos_rois = bbox2roi([res.pos_bboxes for res in sampling_results])
         mask_feats = mask_roi_extractor(x[:mask_roi_extractor.num_inputs],
                                         pos_rois)
-        ic(mask_feats.shape)
 
         # semantic feature fusion
         # element-wise sum for original features and pooled semantic features

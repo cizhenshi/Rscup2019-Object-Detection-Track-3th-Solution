@@ -116,11 +116,17 @@ def get_all_ann(filename, result, img_prefix, size, CLASS_NUM=18):
 
 
 def merge_result(config_file, result_file, anno_file, img_prefix, out_file=None, CLASS_NUM=18):
-    cfg = mmcv.Config.fromfile(config_file)
     results = mmcv.load(result_file)
-    dataset = build_dataset(cfg.data.test)
-    print(cfg.data.test)
-    img_infos = dataset.load_annotations(anno_file)
+    coco = COCO(anno_file)
+    img_ids = coco.getImgIds()
+    img_infos = []
+    for i in img_ids:
+        info = coco.loadImgs([i])[0]
+        info['filename'] = info['file_name']
+        info['height'] = int(info['height'])
+        info['width'] = int(info['width'])
+        img_infos.append(info)
+
     ann = {}
     rets = []
     pbar = mmcv.ProgressBar(len(results))
@@ -128,7 +134,7 @@ def merge_result(config_file, result_file, anno_file, img_prefix, out_file=None,
     def update(*a):
         pbar.update()
 
-    p = Pool(18)
+    p = Pool(8)
     for i in range(len(results)):
         filename = img_infos[i]['filename']
         h = img_infos[i]['height']
@@ -429,14 +435,14 @@ def eval_warpper(classname, detpath, ovthresh, coco):
 
 
 def evaluate(iou_thresh):
-    p = Pool(18)
-    detpath = "./result/val_temp/{}.txt"
+    p = Pool(8)
+    detpath = "./result/detection/{}.txt"
     CLASS = ['tennis-court', 'container-crane', 'storage-tank', 'baseball-diamond', 'plane', 'ground-track-field',
              'helicopter', 'airport', 'harbor', 'ship', 'large-vehicle', 'swimming-pool', 'soccer-ball-field',
              'roundabout', 'basketball-court', 'bridge', 'small-vehicle', 'helipad']
     iou_thresh = 0.5
     aps = []
-    coco = COCO("/home/xfr/rssid/data/annotation/annos_rscup_val.json")
+    coco = COCO("./gt_val.json")
     for classname in CLASS:
         aps.append(p.apply_async(eval_warpper, args=(classname, detpath, iou_thresh, coco)))
     ret = []
@@ -450,13 +456,12 @@ if __name__ == "__main__":
     CLASSES = ['tennis-court', 'container-crane', 'storage-tank', 'baseball-diamond', 'plane', 'ground-track-field',
                'helicopter', 'airport', 'harbor', 'ship', 'large-vehicle', 'swimming-pool', 'soccer-ball-field',
                'roundabout', 'basketball-court', 'bridge', 'small-vehicle', 'helipad']
-    config_file = "./configs/rs_cascade_mask_rcnn_r50_fpn_ohem.py"
     result_file = "./batch_3s.pkl"
-    anno_file = "/home/xfr/mmdetection/data/rscup/annotation/annos_rscup_val.json"
+    anno_file = "./data/rscup/annotation/annos_rscup_val.json"
     out_file = "./result/eval_temp.pkl"
     img_prefix = "./data/rscup/val/"
     ann = merge_result(config_file, result_file, anno_file, img_prefix, out_file)
     ann = nms(ann, "poly", 0.5)
     mmcv.dump(ann, "./result/post_nms.pkl")
-    generate_submit(ann, "val_temp", CLASSES)
-    evaluate(0.5)
+    generate_submit(ann, "detection", CLASSES)
+    #evaluate(0.5)

@@ -309,6 +309,6 @@ total_epochs = 2
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = './work_dirs/htc_next_3s_ft'
-load_from = None
+load_from = "./work_dirs/htc_next_3s/epoch_10.pth"
 resume_from = None
 workflow = [('train', 1)]
