@@ -456,6 +456,7 @@ if __name__ == "__main__":
     CLASSES = ['tennis-court', 'container-crane', 'storage-tank', 'baseball-diamond', 'plane', 'ground-track-field',
                'helicopter', 'airport', 'harbor', 'ship', 'large-vehicle', 'swimming-pool', 'soccer-ball-field',
                'roundabout', 'basketball-court', 'bridge', 'small-vehicle', 'helipad']
+    config_file = None
     result_file = "./batch_3s.pkl"
     anno_file = "./data/rscup/annotation/annos_rscup_val.json"
     out_file = "./result/eval_temp.pkl"
