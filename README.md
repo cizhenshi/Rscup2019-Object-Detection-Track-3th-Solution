@@ -3,9 +3,8 @@
 
 ## Introduction
 
-2019遥感图像稀疏表征与智能分析竞赛初赛第三名方案
+2019遥感图像稀疏表征与智能分析竞赛第三名方案
 
-code_base: <https://github.com/open-mmlab/mmdetection>
 
 ### Major tricks
 
