@@ -1,5 +1,5 @@
 
-# RSCUP2019 3th first stage
+# RSCUP2019 object detection track 3th solution
 
 ## Introduction
 
